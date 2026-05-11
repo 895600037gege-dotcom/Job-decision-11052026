@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Decision Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #F7F5F0; --surface: #FFFFFF; --surface2: #F0EDE6;
+    --border: rgba(0,0,0,0.10); --border2: rgba(0,0,0,0.18);
+    --text: #1A1814; --text2: #6B6760; --text3: #9B9890;
+    --accent: #2D4A3E; --accent-light: #E8F0EC; --accent-text: #1A2E28;
+    --danger: #8B2020; --danger-light: #FDF0F0;
+    --warning: #7A4A10; --warning-light: #FEF6EA;
+    --success: #1A4A2E; --success-light: #EBF5EE;
+    --radius: 10px; --radius-lg: 16px;
+    --font-display: 'DM Serif Display', serif;
+    --font-body: 'DM Sans', sans-serif;
+  }
+  body { font-family: var(--font-body); background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* ── AUTH SCREEN ── */
+  .auth-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .auth-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 40px 36px; width: 100%; max-width: 420px; box-shadow: 0 8px 40px rgba(0,0,0,0.08); }
+  .auth-logo { font-family: var(--font-display); font-size: 26px; color: var(--accent); margin-bottom: 6px; }
+  .auth-tagline { font-size: 13px; color: var(--text2); margin-bottom: 32px; }
+  .auth-tabs { display: flex; gap: 0; background: var(--surface2); border-radius: var(--radius); padding: 3px; margin-bottom: 28px; }
+  .auth-tab { flex: 1; background: none; border: none; padding: 9px; border-radius: 8px; font-family: var(--font-body); font-size: 14px; font-weight: 500; color: var(--text2); cursor: pointer; transition: all 0.2s; }
+  .auth-tab.active { background: var(--surface); color: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+  .auth-form { display: flex; flex-direction: column; gap: 14px; }
+  .auth-input { background: var(--bg); border: 1px solid var(--border2); border-radius: var(--radius); padding: 12px 14px; font-family: var(--font-body); font-size: 14px; color: var(--text); outline: none; transition: border-color 0.15s; }
+  .auth-input:focus { border-color: var(--accent); }
+  .auth-btn { background: var(--accent); color: #fff; border: none; border-radius: var(--radius); padding: 13px; font-family: var(--font-body); font-size: 15px; font-weight: 500; cursor: pointer; transition: opacity 0.15s; margin-top: 4px; }
+  .auth-btn:hover { opacity: 0.88; }
+  .auth-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .auth-msg { font-size: 13px; text-align: center; padding: 10px; border-radius: var(--radius); }
+  .auth-msg.error { background: var(--danger-light); color: var(--danger); }
+  .auth-msg.success { background: var(--success-light); color: var(--success); }
+
+  /* ── APP SHELL ── */
+  .app-shell { display: none; flex-direction: column; min-height: 100vh; }
+  .app-shell.visible { display: flex; }
+  .header { background: var(--accent); padding: 18px 28px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; gap: 12px; }
+  .header-left { display: flex; align-items: center; gap: 16px; }
+  .header-title { font-family: var(--font-display); font-size: 22px; color: #fff; letter-spacing: -0.3px; }
+  .header-title span { font-style: italic; opacity: 0.7; font-size: 14px; display: block; font-family: var(--font-body); font-weight: 300; margin-top: 2px; }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  .user-badge { font-size: 12px; color: rgba(255,255,255,0.7); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lang-toggle { display: flex; background: rgba(255,255,255,0.12); border-radius: 20px; padding: 3px; gap: 2px; }
+  .lang-btn { background: none; border: none; color: rgba(255,255,255,0.65); font-family: var(--font-body); font-size: 13px; font-weight: 500; padding: 5px 14px; border-radius: 16px; cursor: pointer; transition: all 0.2s; }
+  .lang-btn.active { background: rgba(255,255,255,0.22); color: #fff; }
+  .logout-btn { background: rgba(255,255,255,0.12); border: none; color: rgba(255,255,255,0.8); font-family: var(--font-body); font-size: 12px; padding: 6px 12px; border-radius: 20px; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+  .logout-btn:hover { background: rgba(255,255,255,0.22); color: #fff; }
+  .tabs-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 28px; display: flex; position: sticky; top: 64px; z-index: 99; }
+  .tab-btn { background: none; border: none; border-bottom: 2px solid transparent; padding: 14px 20px; font-family: var(--font-body); font-size: 14px; font-weight: 400; color: var(--text2); cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+  .main-content { flex: 1; padding: 28px; max-width: 960px; margin: 0 auto; width: 100%; }
+  .panel { display: none; } .panel.active { display: block; }
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .section-title { font-family: var(--font-display); font-size: 24px; letter-spacing: -0.3px; }
+  .btn-primary { background: var(--accent); color: #fff; border: none; border-radius: var(--radius); padding: 10px 20px; font-family: var(--font-body); font-size: 14px; font-weight: 500; cursor: pointer; transition: opacity 0.15s; }
+  .btn-primary:hover { opacity: 0.88; }
+  .stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; text-align: center; }
+  .stat-num { font-family: var(--font-display); font-size: 28px; line-height: 1; margin-bottom: 4px; }
+  .stat-label { font-size: 12px; color: var(--text2); }
+  .jobs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-bottom: 28px; }
+  .job-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px; transition: border-color 0.2s; }
+  .job-card:hover { border-color: var(--border2); }
+  .job-card-company { font-size: 12px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; }
+  .job-card-title { font-family: var(--font-display); font-size: 18px; margin-bottom: 10px; line-height: 1.3; }
+  .job-card-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 20px; }
+  .pill-stage { background: #EEF2FE; color: #3A50A8; }
+  .pill-stage.offer { background: var(--success-light); color: var(--success); }
+  .pill-stage.rejected { background: var(--danger-light); color: var(--danger); }
+  .pill-stage.screening { background: #FEF6EA; color: var(--warning); }
+  .pill-stage.interview { background: #F0EBF8; color: #5A3A8B; }
+  .pill-loc { background: var(--surface2); color: var(--text2); }
+  .job-card-salary { font-size: 13px; font-weight: 500; color: var(--accent-text); margin-bottom: 12px; }
+  .job-card-actions { display: flex; gap: 8px; border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px; }
+  .btn-sm { flex: 1; background: none; border: 1px solid var(--border2); border-radius: var(--radius); padding: 7px 0; font-family: var(--font-body); font-size: 12px; font-weight: 500; color: var(--text2); cursor: pointer; transition: all 0.15s; }
+  .btn-sm:hover { background: var(--surface2); color: var(--text); }
+  .btn-sm.ai { border-color: var(--accent); color: var(--accent); }
+  .btn-sm.ai:hover { background: var(--accent-light); }
+  .btn-sm.danger { color: var(--danger); }
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--text2); }
+  .empty-state h3 { font-family: var(--font-display); font-size: 20px; color: var(--text); margin-bottom: 8px; }
+  .empty-state p { font-size: 14px; margin-bottom: 20px; }
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border-radius: var(--radius-lg); padding: 28px; width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; position: relative; }
+  .modal-title { font-family: var(--font-display); font-size: 22px; margin-bottom: 22px; }
+  .modal-close { position: absolute; top: 20px; right: 20px; background: none; border: none; font-size: 18px; color: var(--text2); cursor: pointer; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .modal-close:hover { background: var(--surface2); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .form-group { margin-bottom: 0; }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-label { display: block; font-size: 12px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 6px; }
+  .form-input, .form-select, .form-textarea { width: 100%; background: var(--bg); border: 1px solid var(--border2); border-radius: var(--radius); padding: 10px 14px; font-family: var(--font-body); font-size: 14px; color: var(--text); outline: none; transition: border-color 0.15s; }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent); }
+  .form-textarea { min-height: 90px; resize: vertical; }
+  .form-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--border); }
+  .btn-secondary { background: none; border: 1px solid var(--border2); color: var(--text2); border-radius: var(--radius); padding: 10px 20px; font-family: var(--font-body); font-size: 14px; cursor: pointer; }
+  .ai-panel-header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+  .ai-icon { width: 34px; height: 34px; background: var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px; flex-shrink: 0; }
+  .ai-panel-title { font-family: var(--font-display); font-size: 18px; }
+  .ai-subtitle { font-size: 12px; color: var(--text2); margin-top: 2px; }
+  .risk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+  .risk-item { padding: 14px; border-radius: var(--radius); border: 1px solid transparent; }
+  .risk-item.red { background: var(--danger-light); border-color: #F5C0C0; }
+  .risk-item.amber { background: var(--warning-light); border-color: #F9D9A8; }
+  .risk-item.green { background: var(--success-light); border-color: #B8DEC4; }
+  .risk-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 5px; }
+  .risk-item.red .risk-label { color: var(--danger); }
+  .risk-item.amber .risk-label { color: var(--warning); }
+  .risk-item.green .risk-label { color: var(--success); }
+  .risk-text { font-size: 13px; line-height: 1.55; color: var(--text); }
+  .ai-verdict { background: var(--accent-light); border: 1px solid rgba(45,74,62,0.2); border-radius: var(--radius); padding: 14px 16px; font-size: 14px; line-height: 1.65; color: var(--accent-text); }
+  .ai-loading { display: flex; align-items: center; gap: 10px; color: var(--text2); font-size: 14px; padding: 24px 0; }
+  .dots span { display: inline-block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin: 0 2px; animation: bounce 1.2s infinite; }
+  .dots span:nth-child(2) { animation-delay: 0.2s; }
+  .dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%,80%,100%{transform:scale(0.7);opacity:0.5} 40%{transform:scale(1);opacity:1} }
+  .notes-list { display: flex; flex-direction: column; gap: 14px; }
+  .note-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px; }
+  .note-card:hover { border-color: var(--border2); }
+  .note-card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+  .note-job-ref { font-size: 12px; color: var(--text2); font-weight: 500; text-transform: uppercase; letter-spacing: 0.6px; }
+  .note-date { font-size: 12px; color: var(--text3); }
+  .note-round { font-family: var(--font-display); font-size: 16px; margin-bottom: 8px; }
+  .note-body { font-size: 14px; line-height: 1.6; color: var(--text2); white-space: pre-line; }
+  .note-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .note-tag { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: var(--surface2); color: var(--text2); }
+  .note-card-actions { display: flex; gap: 8px; border-top: 1px solid var(--border); padding-top: 12px; margin-top: 14px; }
+  .api-banner { background: var(--warning-light); border: 1px solid #F9D9A8; border-radius: var(--radius); padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; font-size: 13px; color: var(--warning); flex-wrap: wrap; }
+  .api-banner input { flex: 1; min-width: 180px; background: #fff; border: 1px solid #F9D9A8; border-radius: 8px; padding: 8px 12px; font-size: 13px; font-family: var(--font-body); color: var(--text); outline: none; }
+  .api-banner button { background: var(--warning); color: #fff; border: none; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-family: var(--font-body); cursor: pointer; white-space: nowrap; }
+  .api-banner.saved { background: var(--success-light); border-color: #B8DEC4; color: var(--success); }
+  .feedback-float { position: fixed; bottom: 24px; right: 24px; z-index: 500; }
+  .feedback-btn { background: var(--accent); color: #fff; border: none; border-radius: 50px; padding: 12px 22px; font-family: var(--font-body); font-size: 14px; font-weight: 500; cursor: pointer; box-shadow: 0 4px 16px rgba(45,74,62,0.3); transition: opacity 0.15s; }
+  .feedback-btn:hover { opacity: 0.88; }
+  .feedback-box { display: none; background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-lg); padding: 20px; width: 300px; margin-bottom: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.12); }
+  .feedback-box.open { display: block; }
+  .feedback-box h4 { font-family: var(--font-display); font-size: 17px; margin-bottom: 12px; }
+  .feedback-stars { display: flex; gap: 8px; margin-bottom: 14px; }
+  .star-btn { background: none; border: none; font-size: 24px; cursor: pointer; opacity: 0.3; transition: opacity 0.15s; padding: 0; }
+  .star-btn.active { opacity: 1; }
+  .feedback-box textarea { width: 100%; background: var(--bg); border: 1px solid var(--border2); border-radius: var(--radius); padding: 10px 12px; font-family: var(--font-body); font-size: 13px; color: var(--text); resize: none; min-height: 70px; outline: none; margin-bottom: 12px; }
+  .feedback-box textarea:focus { border-color: var(--accent); }
+  .feedback-sent { text-align: center; padding: 16px 0; color: var(--success); font-size: 14px; }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--text); color: #fff; padding: 12px 20px; border-radius: var(--radius); font-size: 13px; z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .loading-overlay { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+  .loading-overlay.hidden { display: none; }
+  .loading-overlay p { font-family: var(--font-display); font-size: 20px; color: var(--accent); }
+  @media (max-width: 600px) {
+    .main-content { padding: 16px; } .form-row { grid-template-columns: 1fr; }
+    .risk-grid { grid-template-columns: 1fr; } .stats-bar { grid-template-columns: 1fr 1fr; }
+    .jobs-grid { grid-template-columns: 1fr; } .header { padding: 14px 16px; }
+    .tabs-bar { padding: 0 16px; top: 60px; } .user-badge { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Loading -->
+<div class="loading-overlay" id="loading-overlay">
+  <p>Loading...</p>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- ── AUTH SCREEN ── -->
+<div class="auth-screen" id="auth-screen" style="display:none;">
+  <div class="auth-card">
+    <div class="auth-logo">Job Decision Assistant</div>
+    <div class="auth-tagline">Track applications · Record interviews · AI risk analysis</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Sign In</button>
+      <button class="auth-tab" id="tab-signup" onclick="switchAuthTab('signup')">Sign Up</button>
+    </div>
+    <div class="auth-form">
+      <input type="email" class="auth-input" id="auth-email" placeholder="Email address" />
+      <input type="password" class="auth-input" id="auth-password" placeholder="Password" />
+      <div id="auth-msg" style="display:none;"></div>
+      <button class="auth-btn" id="auth-submit-btn" onclick="handleAuth()">Sign In</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── APP SHELL ── -->
+<div class="app-shell" id="app-shell">
+  <div class="header">
+    <div class="header-left">
+      <div class="header-title" id="main-title">Job Decision Assistant</div>
+    </div>
+    <div class="header-right">
+      <span class="user-badge" id="user-badge"></span>
+      <div class="lang-toggle">
+        <button class="lang-btn active" onclick="setLang('en')">EN</button>
+        <button class="lang-btn" onclick="setLang('zh')">中文</button>
+      </div>
+      <button class="logout-btn" onclick="handleLogout()" id="btn-logout">Sign Out</button>
+    </div>
+  </div>
+  <div class="tabs-bar">
+    <button class="tab-btn active" onclick="switchTab('jobs')" id="tab-jobs" data-zh="我的岗位" data-en="My Jobs">My Jobs</button>
+    <button class="tab-btn" onclick="switchTab('notes')" id="tab-notes" data-zh="面试笔记" data-en="Interview Notes">Interview Notes</button>
+  </div>
+  <div class="main-content">
+    <div class="api-banner" id="api-banner"></div>
+    <div id="panel-jobs" class="panel active">
+      <div class="stats-bar" id="stats-bar"></div>
+      <div class="section-header">
+        <h2 class="section-title" id="title-jobs" data-zh="申请追踪" data-en="Application Tracker">Application Tracker</h2>
+        <button class="btn-primary" onclick="openJobModal()" id="btn-add-job" data-zh="+ 添加岗位" data-en="+ Add Job">+ Add Job</button>
+      </div>
+      <div class="jobs-grid" id="jobs-grid"></div>
+    </div>
+    <div id="panel-notes" class="panel">
+      <div class="section-header">
+        <h2 class="section-title" id="title-notes" data-zh="面试笔记" data-en="Interview Notes">Interview Notes</h2>
+        <button class="btn-primary" onclick="openNoteModal()" id="btn-add-note" data-zh="+ 新增笔记" data-en="+ Add Note">+ Add Note</button>
+      </div>
+      <div class="notes-list" id="notes-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Job Modal -->
+<div class="modal-overlay" id="modal-job">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('modal-job')">✕</button>
+    <h2 class="modal-title" id="modal-job-title">Add Job</h2>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Company</label><input type="text" class="form-input" id="inp-company" placeholder="e.g. ByteDance"></div>
+      <div class="form-group"><label class="form-label">Position</label><input type="text" class="form-input" id="inp-position" placeholder="e.g. Product Manager"></div>
+      <div class="form-group"><label class="form-label">Location</label><input type="text" class="form-input" id="inp-location" placeholder="e.g. Shanghai"></div>
+      <div class="form-group"><label class="form-label">Salary Range</label><input type="text" class="form-input" id="inp-salary" placeholder="e.g. 30–40k"></div>
+      <div class="form-group"><label class="form-label">Stage</label>
+        <select class="form-select" id="inp-stage">
+          <option value="screening">Screening</option>
+          <option value="interview">Interview</option>
+          <option value="offer">Offer</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Applied Date</label><input type="date" class="form-input" id="inp-date"></div>
+      <div class="form-group full"><label class="form-label">Job Description (for AI analysis)</label><textarea class="form-textarea" id="inp-jd" style="min-height:100px" placeholder="Paste JD here — AI will analyze risks and red flags..."></textarea></div>
+      <div class="form-group full"><label class="form-label">Notes</label><textarea class="form-textarea" id="inp-notes-inline" placeholder="Referral source, contact, notes..."></textarea></div>
+      <div class="form-group full" id="ai-analysis-section" style="display:none;">
+        <label class="form-label" id="ai-analysis-label">AI Analysis</label>
+        <div id="ai-analysis-display" style="background:var(--accent-light);border:1px solid rgba(45,74,62,0.18);border-radius:var(--radius);padding:14px 16px;font-size:13px;line-height:1.65;color:var(--accent-text);white-space:pre-wrap;"></div>
+        <div style="display:flex;justify-content:flex-end;margin-top:8px;"><button class="btn-sm danger" style="flex:none;padding:5px 14px;" onclick="clearAIAnalysis()">🗑 Clear</button></div>
+      </div>
+    </div>
+    <div class="form-footer">
+      <button class="btn-secondary" onclick="closeModal('modal-job')">Cancel</button>
+      <button class="btn-primary" onclick="saveJob()" id="btn-save-job">Save Job</button>
+    </div>
+  </div>
+</div>
+
+<!-- Note Modal -->
+<div class="modal-overlay" id="modal-note">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('modal-note')">✕</button>
+    <h2 class="modal-title" id="modal-note-title">Interview Note</h2>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Linked Job</label><select class="form-select" id="inp-note-job"></select></div>
+      <div class="form-group"><label class="form-label">Interview Round</label><input type="text" class="form-input" id="inp-note-round" placeholder="e.g. Phone Screen / Final Round"></div>
+      <div class="form-group full"><label class="form-label">Interview Notes</label><textarea class="form-textarea" id="inp-note-content" style="min-height:120px" placeholder="Questions asked, your answers, overall impression..."></textarea></div>
+      <div class="form-group full"><label class="form-label">Tags (comma separated)</label><input type="text" class="form-input" id="inp-note-tags" placeholder="e.g. coding, behavioral, salary negotiation"></div>
+    </div>
+    <div class="form-footer">
+      <button class="btn-secondary" onclick="closeModal('modal-note')">Cancel</button>
+      <button class="btn-primary" onclick="saveNote()" id="btn-save-note">Save Note</button>
+    </div>
+  </div>
+</div>
+
+<!-- Feedback Widget -->
+<div class="feedback-float" id="feedback-float" style="display:none;">
+  <div class="feedback-box" id="feedback-box">
+    <h4 id="fb-title">How's your experience?</h4>
+    <div class="feedback-stars" id="fb-stars">
+      <button class="star-btn" onclick="rateStar(1)">★</button>
+      <button class="star-btn" onclick="rateStar(2)">★</button>
+      <button class="star-btn" onclick="rateStar(3)">★</button>
+      <button class="star-btn" onclick="rateStar(4)">★</button>
+      <button class="star-btn" onclick="rateStar(5)">★</button>
+    </div>
+    <textarea id="fb-text" placeholder="Any suggestions or issues? (optional)"></textarea>
+    <button class="btn-primary" style="width:100%" onclick="submitFeedback()" id="fb-submit">Submit Feedback</button>
+  </div>
+  <button class="feedback-btn" onclick="toggleFeedback()" id="feedback-toggle-btn">💬 Feedback</button>
+</div>
+
+<!-- AI Modal -->
+<div class="modal-overlay" id="modal-ai">
+  <div class="modal" style="max-width:620px;">
+    <button class="modal-close" onclick="closeModal('modal-ai')">✕</button>
+    <div class="ai-panel-header">
+      <div class="ai-icon">✦</div>
+      <div><div class="ai-panel-title" id="ai-panel-job-name"></div><div class="ai-subtitle">AI Risk Analysis</div></div>
+    </div>
+    <div id="ai-loading" class="ai-loading"><div class="dots"><span></span><span></span><span></span></div><span>Analyzing job details...</span></div>
+    <div id="ai-result" style="display:none;"></div>
+  </div>
+</div>
+
+<script>
+// ── SUPABASE INIT ──────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://iwmhtjnefdwdnpdkpylc.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_S_eDEq8Sb61JzAnzWVH8Ug_turk6dXg';
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ── STATE ──────────────────────────────────────────────────────────────────
+let lang = 'en';
+let jobs = [];
+let notes = [];
+let currentUser = null;
+let editingJobId = null;
+let editingNoteId = null;
+let apiKey = localStorage.getItem('jda_api_key') || '';
+let currentAIJobId = null;
+let currentAIParsed = null;
+let authMode = 'login';
+
+// ── TRANSLATIONS ───────────────────────────────────────────────────────────
+const T = {
+  zh: { total:'全部申请', interviews:'面试中', offers:'已拿Offer', notesCount:'面试笔记', noJobs:'还没有添加岗位', noJobsSub:'点击右上角开始记录你的第一个申请', noNotes:'还没有面试笔记', noNotesSub:'完成面试后在这里记录', addFirst:'+ 添加第一个岗位', stages:{screening:'初步筛选',interview:'面试中',offer:'Offer',rejected:'未通过'}, edit:'编辑', analyze:'AI分析', del:'删除', editNote:'编辑', delNote:'删除' },
+  en: { total:'Total', interviews:'Interviews', offers:'Offers', notesCount:'Notes', noJobs:'No jobs added yet', noJobsSub:'Click the button to add your first application', noNotes:'No interview notes yet', noNotesSub:'Record notes after each interview', addFirst:'+ Add First Job', stages:{screening:'Screening',interview:'Interview',offer:'Offer',rejected:'Rejected'}, edit:'Edit', analyze:'AI Analyze', del:'Delete', editNote:'Edit', delNote:'Delete' }
+};
+
+// ── INIT ───────────────────────────────────────────────────────────────────
+async function init() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    currentUser = session.user;
+    await showApp();
+  } else {
+    showAuth();
+  }
+  document.getElementById('loading-overlay').classList.add('hidden');
+
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && session) {
+      currentUser = session.user;
+      await showApp();
+    } else if (event === 'SIGNED_OUT') {
+      currentUser = null;
+      showAuth();
+    }
+  });
+}
+
+// ── AUTH ───────────────────────────────────────────────────────────────────
+function showAuth() {
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('app-shell').classList.remove('visible');
+}
+
+async function showApp() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app-shell').classList.add('visible');
+  document.getElementById('feedback-float').style.display = 'block';
+  document.getElementById('user-badge').textContent = currentUser?.email || '';
+  await loadData();
+  updateApiBanner();
+  renderStats();
+  renderJobs();
+  renderNotes();
+}
+
+function switchAuthTab(mode) {
+  authMode = mode;
+  document.getElementById('tab-login').classList.toggle('active', mode === 'login');
+  document.getElementById('tab-signup').classList.toggle('active', mode === 'signup');
+  document.getElementById('auth-submit-btn').textContent = mode === 'login' ? 'Sign In' : 'Create Account';
+  document.getElementById('auth-msg').style.display = 'none';
+}
+
+async function handleAuth() {
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const btn = document.getElementById('auth-submit-btn');
+  const msg = document.getElementById('auth-msg');
+
+  if (!email || !password) { showAuthMsg('Please enter email and password.', 'error'); return; }
+  btn.disabled = true;
+  btn.textContent = authMode === 'login' ? 'Signing in...' : 'Creating account...';
+
+  let result;
+  if (authMode === 'login') {
+    result = await sb.auth.signInWithPassword({ email, password });
+  } else {
+    result = await sb.auth.signUp({ email, password });
+  }
+
+  if (result.error) {
+    showAuthMsg(result.error.message, 'error');
+    btn.disabled = false;
+    btn.textContent = authMode === 'login' ? 'Sign In' : 'Create Account';
+  } else if (authMode === 'signup' && !result.data.session) {
+    showAuthMsg('Account created! Please check your email to confirm.', 'success');
+    btn.disabled = false;
+    btn.textContent = 'Create Account';
+  }
+}
+
+function showAuthMsg(text, type) {
+  const msg = document.getElementById('auth-msg');
+  msg.textContent = text;
+  msg.className = `auth-msg ${type}`;
+  msg.style.display = 'block';
+}
+
+async function handleLogout() {
+  const { error } = await sb.auth.signOut();
+  jobs = []; notes = [];
+  document.getElementById('feedback-float').style.display = 'none';
+  document.getElementById('app-shell').classList.remove('visible');
+  document.getElementById('auth-screen').style.display = 'flex';
+}
+
+// ── DATA LOADING ───────────────────────────────────────────────────────────
+async function loadData() {
+  const [jobsRes, notesRes] = await Promise.all([
+    sb.from('jobs').select('*').order('created_at', { ascending: false }),
+    sb.from('notes').select('*').order('created_at', { ascending: false })
+  ]);
+  jobs = jobsRes.data || [];
+  notes = notesRes.data || [];
+}
+
+// ── JOBS CRUD ──────────────────────────────────────────────────────────────
+function openJobModal(id) {
+  editingJobId = id || null;
+  const aiSection = document.getElementById('ai-analysis-section');
+  if (id) {
+    const j = jobs.find(x => x.id === id);
+    document.getElementById('inp-company').value = j.company;
+    document.getElementById('inp-position').value = j.position;
+    document.getElementById('inp-location').value = j.location || '';
+    document.getElementById('inp-salary').value = j.salary || '';
+    document.getElementById('inp-stage').value = j.stage;
+    document.getElementById('inp-date').value = j.date || '';
+    document.getElementById('inp-jd').value = j.jd || '';
+    document.getElementById('inp-notes-inline').value = j.notes || '';
+    document.getElementById('modal-job-title').textContent = lang === 'zh' ? '编辑岗位' : 'Edit Job';
+    if (j.ai_analysis) {
+      document.getElementById('ai-analysis-label').textContent = (lang === 'zh' ? 'AI 分析结果' : 'AI Analysis') + (j.ai_analysis.date ? ' (' + j.ai_analysis.date + ')' : '');
+      document.getElementById('ai-analysis-display').textContent = j.ai_analysis.text;
+      aiSection.style.display = 'block';
+    } else { aiSection.style.display = 'none'; }
+  } else {
+    ['company','position','location','salary','jd','notes-inline'].forEach(f => document.getElementById('inp-'+f).value = '');
+    document.getElementById('inp-stage').value = 'screening';
+    document.getElementById('inp-date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('modal-job-title').textContent = lang === 'zh' ? '添加岗位' : 'Add Job';
+    aiSection.style.display = 'none';
+  }
+  document.getElementById('modal-job').classList.add('open');
+}
+
+async function saveJob() {
+  const company = document.getElementById('inp-company').value.trim();
+  const position = document.getElementById('inp-position').value.trim();
+  if (!company || !position) return;
+
+  const btn = document.getElementById('btn-save-job');
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  const payload = {
+    user_id: currentUser.id,
+    company, position,
+    location: document.getElementById('inp-location').value.trim(),
+    salary: document.getElementById('inp-salary').value.trim(),
+    stage: document.getElementById('inp-stage').value,
+    date: document.getElementById('inp-date').value,
+    jd: document.getElementById('inp-jd').value.trim(),
+    notes: document.getElementById('inp-notes-inline').value.trim(),
+  };
+
+  let error;
+  if (editingJobId) {
+    const existing = jobs.find(x => x.id === editingJobId);
+    payload.ai_analysis = existing?.ai_analysis || null;
+    ({ error } = await sb.from('jobs').update(payload).eq('id', editingJobId));
+  } else {
+    ({ error } = await sb.from('jobs').insert(payload));
+  }
+
+  btn.disabled = false; btn.textContent = lang === 'zh' ? '保存岗位' : 'Save Job';
+  if (error) { showToast('Error saving job: ' + error.message); return; }
+  await loadData(); closeModal('modal-job'); renderStats(); renderJobs();
+  showToast(lang === 'zh' ? '岗位已保存 ✓' : 'Job saved ✓');
+}
+
+async function deleteJob(id) {
+  if (!confirm(lang === 'zh' ? '确定删除此岗位及相关笔记？' : 'Delete this job and its notes?')) return;
+  const { error } = await sb.from('jobs').delete().eq('id', id);
+  if (error) { showToast('Error: ' + error.message); return; }
+  await loadData(); renderStats(); renderJobs(); renderNotes();
+  showToast(lang === 'zh' ? '已删除 ✓' : 'Deleted ✓');
+}
+
+async function clearAIAnalysis() {
+  if (!editingJobId) return;
+  await sb.from('jobs').update({ ai_analysis: null }).eq('id', editingJobId);
+  await loadData();
+  renderJobs();
+  document.getElementById('ai-analysis-section').style.display = 'none';
+}
+
+function renderJobs() {
+  const t = T[lang], grid = document.getElementById('jobs-grid');
+  if (jobs.length === 0) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><h3>${t.noJobs}</h3><p>${t.noJobsSub}</p><button class="btn-primary" onclick="openJobModal()">${t.addFirst}</button></div>`;
+    return;
+  }
+  grid.innerHTML = jobs.map(j => `<div class="job-card">
+    <div class="job-card-company">${j.company}</div>
+    <div class="job-card-title">${j.position}</div>
+    <div class="job-card-meta"><span class="pill pill-stage ${j.stage}">${t.stages[j.stage]}</span>${j.location ? `<span class="pill pill-loc">${j.location}</span>` : ''}</div>
+    ${j.salary ? `<div class="job-card-salary">${j.salary}</div>` : ''}
+    <div class="job-card-actions">
+      <button class="btn-sm" onclick="openJobModal('${j.id}')">${t.edit}</button>
+      <button class="btn-sm ai" onclick="runAI('${j.id}')">${t.analyze}</button>
+      <button class="btn-sm danger" onclick="deleteJob('${j.id}')">${t.del}</button>
+    </div>
+  </div>`).join('');
+}
+
+// ── NOTES CRUD ─────────────────────────────────────────────────────────────
+function openNoteModal(id) {
+  editingNoteId = id || null;
+  const sel = document.getElementById('inp-note-job');
+  if (jobs.length === 0) { showToast(lang === 'zh' ? '请先添加一个岗位' : 'Please add a job first'); return; }
+  sel.innerHTML = jobs.map(j => `<option value="${j.id}">${j.company} — ${j.position}</option>`).join('');
+  if (id) {
+    const n = notes.find(x => x.id === id);
+    if (!n) return;
+    sel.value = n.job_id;
+    document.getElementById('inp-note-round').value = n.round || '';
+    document.getElementById('inp-note-content').value = n.content || '';
+    document.getElementById('inp-note-tags').value = (n.tags || []).join(', ');
+    document.getElementById('modal-note-title').textContent = lang === 'zh' ? '编辑笔记' : 'Edit Note';
+  } else {
+    ['note-round','note-content','note-tags'].forEach(f => document.getElementById('inp-'+f).value = '');
+    document.getElementById('modal-note-title').textContent = lang === 'zh' ? '面试笔记' : 'Interview Note';
+  }
+  document.getElementById('modal-note').classList.add('open');
+}
+
+async function saveNote() {
+  const content = document.getElementById('inp-note-content').value.trim();
+  if (!content) return;
+
+  const btn = document.getElementById('btn-save-note');
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  const payload = {
+    user_id: currentUser.id,
+    job_id: document.getElementById('inp-note-job').value,
+    round: document.getElementById('inp-note-round').value.trim() || (lang === 'zh' ? '面试记录' : 'Interview'),
+    content,
+    tags: document.getElementById('inp-note-tags').value.split(',').map(s => s.trim()).filter(Boolean),
+    date: new Date().toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US')
+  };
+
+  let error;
+  if (editingNoteId) {
+    ({ error } = await sb.from('notes').update(payload).eq('id', editingNoteId));
+  } else {
+    ({ error } = await sb.from('notes').insert(payload));
+  }
+
+  btn.disabled = false; btn.textContent = lang === 'zh' ? '保存笔记' : 'Save Note';
+  if (error) { showToast('Error: ' + error.message); return; }
+  await loadData(); closeModal('modal-note'); renderStats(); renderNotes();
+  showToast(lang === 'zh' ? '笔记已保存 ✓' : 'Note saved ✓');
+}
+
+async function deleteNote(id) {
+  if (!confirm(lang === 'zh' ? '确定删除此笔记？' : 'Delete this note?')) return;
+  const { error } = await sb.from('notes').delete().eq('id', id);
+  if (error) { showToast('Error: ' + error.message); return; }
+  await loadData(); renderStats(); renderNotes();
+  showToast(lang === 'zh' ? '已删除 ✓' : 'Deleted ✓');
+}
+
+function renderNotes() {
+  const t = T[lang], list = document.getElementById('notes-list');
+  if (notes.length === 0) {
+    list.innerHTML = `<div class="empty-state"><h3>${t.noNotes}</h3><p>${t.noNotesSub}</p></div>`;
+    return;
+  }
+  list.innerHTML = notes.map(n => {
+    const j = jobs.find(x => x.id === n.job_id);
+    const ref = j ? `${j.company} — ${j.position}` : (lang === 'zh' ? '已删除岗位' : 'Deleted job');
+    return `<div class="note-card">
+      <div class="note-card-header"><div class="note-job-ref">${ref}</div><div class="note-date">${n.date || ''}</div></div>
+      <div class="note-round">${n.round}</div>
+      <div class="note-body">${n.content}</div>
+      ${n.tags && n.tags.length ? `<div class="note-tags">${n.tags.map(tag => `<span class="note-tag">${tag}</span>`).join('')}</div>` : ''}
+      <div class="note-card-actions">
+        <button class="btn-sm" onclick="openNoteModal('${n.id}')">${t.editNote}</button>
+        <button class="btn-sm danger" onclick="deleteNote('${n.id}')">${t.delNote}</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── STATS ──────────────────────────────────────────────────────────────────
+function renderStats() {
+  const t = T[lang];
+  document.getElementById('stats-bar').innerHTML = `
+    <div class="stat-card"><div class="stat-num">${jobs.length}</div><div class="stat-label">${t.total}</div></div>
+    <div class="stat-card"><div class="stat-num">${jobs.filter(j=>j.stage==='interview').length}</div><div class="stat-label">${t.interviews}</div></div>
+    <div class="stat-card"><div class="stat-num">${jobs.filter(j=>j.stage==='offer').length}</div><div class="stat-label">${t.offers}</div></div>
+    <div class="stat-card"><div class="stat-num">${notes.length}</div><div class="stat-label">${t.notesCount}</div></div>`;
+}
+
+// ── AI ─────────────────────────────────────────────────────────────────────
+function updateApiBanner() {
+  const b = document.getElementById('api-banner');
+  if (apiKey) {
+    b.className = 'api-banner saved';
+    b.innerHTML = `<span>${lang==='zh'?'✓ API Key 已设置，AI 分析功能已启用':'✓ API Key saved — AI analysis enabled'}</span><button onclick="clearApiKey()" style="background:none;border:1px solid currentColor;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;color:inherit;">${lang==='zh'?'更换':'Change'}</button>`;
+  } else {
+    b.className = 'api-banner';
+    b.innerHTML = `<span>${lang==='zh'?'🔑 输入 Claude API Key 启用 AI 分析功能':'🔑 Enter Claude API Key to enable AI analysis'}</span><input type="password" id="api-key-input" placeholder="sk-ant-..." /><button onclick="saveApiKey()">${lang==='zh'?'保存':'Save'}</button>`;
+  }
+}
+
+function saveApiKey() { const v = document.getElementById('api-key-input')?.value?.trim(); if (!v) return; apiKey = v; localStorage.setItem('jda_api_key', apiKey); updateApiBanner(); }
+function clearApiKey() { apiKey = ''; localStorage.removeItem('jda_api_key'); updateApiBanner(); }
+
+async function runAI(jobId) {
+  if (!apiKey) { showToast(lang === 'zh' ? '请先输入 API Key' : 'Please enter your API Key'); return; }
+  const job = jobs.find(j => j.id === jobId);
+  if (!job) return;
+  currentAIJobId = jobId; currentAIParsed = null;
+  document.getElementById('ai-panel-job-name').textContent = `${job.company} · ${job.position}`;
+  document.getElementById('ai-loading').style.display = 'flex';
+  document.getElementById('ai-result').style.display = 'none';
+  document.getElementById('modal-ai').classList.add('open');
+  const prompt = lang === 'zh'
+    ? `你是专业求职顾问，分析这个岗位的潜在风险。\n公司：${job.company}\n岗位：${job.position}\n地点：${job.location||'未知'}\n薪资：${job.salary||'未知'}\nJD：${job.jd||'未提供'}\n备注：${job.notes||'无'}\n\n只返回以下JSON：\n{"risks":[{"level":"red","title":"高风险雷区","text":"说明"},{"level":"amber","title":"需要关注","text":"说明"},{"level":"green","title":"积极信号","text":"说明"}],"verdict":"综合决策建议（2-3句）"}`
+    : `You are a career advisor. Analyze this job.\nCompany:${job.company}\nPosition:${job.position}\nLocation:${job.location||'Unknown'}\nSalary:${job.salary||'Unknown'}\nJD:${job.jd||'Not provided'}\nNotes:${job.notes||'None'}\n\nReturn ONLY JSON:\n{"risks":[{"level":"red","title":"High Risk","text":"..."},{"level":"amber","title":"Watch Out","text":"..."},{"level":"green","title":"Positive","text":"..."}],"verdict":"Recommendation (2-3 sentences)"}`;
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}, body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000, messages:[{role:'user',content:prompt}] }) });
+    const data = await res.json();
+    const raw = data.content.map(i => i.text||'').join('');
+    const parsed = JSON.parse(raw.replace(/```json|```/g,'').trim());
+    currentAIParsed = parsed;
+    document.getElementById('ai-result').innerHTML = `<div class="risk-grid">${parsed.risks.map(r=>`<div class="risk-item ${r.level}"><div class="risk-label">${r.title}</div><div class="risk-text">${r.text}</div></div>`).join('')}</div><div class="ai-verdict"><strong>${lang==='zh'?'综合建议：':'Verdict: '}</strong>${parsed.verdict}</div><div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;"><span style="font-size:12px;color:var(--text3);">${lang==='zh'?'保存后可在编辑岗位时查看':'Viewable in job edit after saving'}</span><button class="btn-primary" id="btn-save-ai" onclick="saveAIResult()" style="font-size:13px;padding:9px 18px;">${lang==='zh'?'💾 保存到岗位详情':'💾 Save to Job'}</button></div>`;
+    document.getElementById('ai-loading').style.display = 'none';
+    document.getElementById('ai-result').style.display = 'block';
+  } catch(e) {
+    document.getElementById('ai-result').innerHTML = `<p style="color:var(--danger);font-size:14px;padding:16px 0;">${lang==='zh'?'分析失败，请检查 API Key':'Analysis failed. Check your API key.'}</p>`;
+    document.getElementById('ai-loading').style.display = 'none';
+    document.getElementById('ai-result').style.display = 'block';
+  }
+}
+
+async function saveAIResult() {
+  if (!currentAIJobId || !currentAIParsed) return;
+  const risksText = currentAIParsed.risks.map(r=>`[${r.title}]\n${r.text}`).join('\n\n');
+  const text = (lang==='zh'?'── 风险分析 ──\n':'── Risk Analysis ──\n') + risksText + '\n\n' + (lang==='zh'?'── 综合建议 ──\n':'── Verdict ──\n') + currentAIParsed.verdict;
+  const ai_analysis = { text, date: new Date().toLocaleDateString(lang==='zh'?'zh-CN':'en-US') };
+  const { error } = await sb.from('jobs').update({ ai_analysis }).eq('id', currentAIJobId);
+  if (error) { showToast('Error saving: ' + error.message); return; }
+  await loadData(); renderJobs();
+  const btn = document.getElementById('btn-save-ai');
+  if (btn) { btn.textContent = lang==='zh'?'✓ 已保存':'✓ Saved'; btn.disabled = true; btn.style.opacity='0.65'; }
+  setTimeout(() => closeModal('modal-ai'), 600);
+  showToast(lang==='zh'?'AI 分析已保存 ✓':'AI analysis saved ✓');
+}
+
+// ── UI HELPERS ─────────────────────────────────────────────────────────────
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function switchTab(t) {
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('panel-'+t).classList.add('active');
+  document.getElementById('tab-'+t).classList.add('active');
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+function setLang(l) {
+  lang = l;
+  document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', (l==='zh'&&b.textContent==='中文')||(l==='en'&&b.textContent==='EN')));
+  document.getElementById('main-title').textContent = l==='zh' ? '求职决策助手' : 'Job Decision Assistant';
+  document.getElementById('btn-logout').textContent = l==='zh' ? '退出登录' : 'Sign Out';
+  document.querySelectorAll('[data-zh]').forEach(el => { if(el.tagName==='INPUT') return; el.textContent = el.dataset[l]; });
+  updateApiBanner(); renderStats(); renderJobs(); renderNotes();
+}
+
+// ── FEEDBACK ──────────────────────────────────────────────────────────────
+let feedbackOpen = false;
+let selectedStars = 0;
+
+function toggleFeedback() {
+  feedbackOpen = !feedbackOpen;
+  document.getElementById('feedback-box').classList.toggle('open', feedbackOpen);
+}
+
+function rateStar(n) {
+  selectedStars = n;
+  document.querySelectorAll('.star-btn').forEach((b,i) => b.classList.toggle('active', i < n));
+}
+
+function submitFeedback() {
+  if (selectedStars === 0) { alert(lang === 'zh' ? '请先选择评分！' : 'Please select a rating first!'); return; }
+  const webAppUrl = 'https://script.google.com/macros/s/AKfycbytKqitjmcwzYToypMZDNwwyUWmXDJwR3N5CaDorqw3ANOcgxb0rD4g2N1sbQmirwSnQg/exec';
+  const btn = document.getElementById('fb-submit');
+  btn.textContent = 'Submitting...'; btn.disabled = true;
+  const params = new URLSearchParams();
+  params.append('stars', selectedStars);
+  params.append('feedback', document.getElementById('fb-text').value);
+  params.append('userAgent', navigator.userAgent);
+  fetch(webAppUrl, { method: 'POST', body: params })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'success') {
+        document.getElementById('feedback-box').innerHTML = '<div class="feedback-sent">✓ Thanks for your feedback!</div>';
+        setTimeout(() => { resetFeedbackBox(); toggleFeedback(); }, 2000);
+      } else { throw new Error(); }
+    })
+    .catch(() => {
+      document.getElementById('feedback-box').innerHTML = '<div class="feedback-sent" style="color:var(--danger);">✗ Submission failed, please try again</div>';
+      setTimeout(() => resetFeedbackBox(), 2000);
+    });
+}
+
+function resetFeedbackBox() {
+  selectedStars = 0;
+  document.getElementById('feedback-box').innerHTML = `
+    <h4>How's your experience?</h4>
+    <div class="feedback-stars">
+      <button class="star-btn" onclick="rateStar(1)">★</button>
+      <button class="star-btn" onclick="rateStar(2)">★</button>
+      <button class="star-btn" onclick="rateStar(3)">★</button>
+      <button class="star-btn" onclick="rateStar(4)">★</button>
+      <button class="star-btn" onclick="rateStar(5)">★</button>
+    </div>
+    <textarea id="fb-text" placeholder="Any suggestions or issues? (optional)"></textarea>
+    <button class="btn-primary" style="width:100%" onclick="submitFeedback()" id="fb-submit">Submit Feedback</button>
+  `;
+}
+
+// ── START ──────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
