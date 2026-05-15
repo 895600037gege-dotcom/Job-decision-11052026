@@ -137,10 +137,7 @@
   .note-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
   .note-tag { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: var(--surface2); color: var(--text2); }
   .note-card-actions { display: flex; gap: 8px; border-top: 1px solid var(--border); padding-top: 12px; margin-top: 14px; }
-  .api-banner { background: var(--warning-light); border: 1px solid #F9D9A8; border-radius: var(--radius); padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; font-size: 13px; color: var(--warning); flex-wrap: wrap; }
-  .api-banner input { flex: 1; min-width: 180px; background: #fff; border: 1px solid #F9D9A8; border-radius: 8px; padding: 8px 12px; font-size: 13px; font-family: var(--font-body); color: var(--text); outline: none; }
-  .api-banner button { background: var(--warning); color: #fff; border: none; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-family: var(--font-body); cursor: pointer; white-space: nowrap; }
-  .api-banner.saved { background: var(--success-light); border-color: #B8DEC4; color: var(--success); }
+
   .feedback-float { position: fixed; bottom: 24px; right: 24px; z-index: 500; }
   .feedback-btn { background: var(--accent); color: #fff; border: none; border-radius: 50px; padding: 12px 22px; font-family: var(--font-body); font-size: 14px; font-weight: 500; cursor: pointer; box-shadow: 0 4px 16px rgba(45,74,62,0.3); transition: opacity 0.15s; }
   .feedback-btn:hover { opacity: 0.88; }
@@ -214,7 +211,7 @@
     <button class="tab-btn" onclick="switchTab('notes')" id="tab-notes" data-zh="面试笔记" data-en="Interview Notes">Interview Notes</button>
   </div>
   <div class="main-content">
-    <div class="api-banner" id="api-banner"></div>
+
     <div id="panel-jobs" class="panel active">
       <div class="stats-bar" id="stats-bar"></div>
       <div class="section-header">
@@ -329,7 +326,7 @@ let notes = [];
 let currentUser = null;
 let editingJobId = null;
 let editingNoteId = null;
-let apiKey = localStorage.getItem('jda_api_key') || '';
+
 let currentAIJobId = null;
 let currentAIParsed = null;
 let authMode = 'login';
@@ -374,7 +371,6 @@ async function showApp() {
   document.getElementById('feedback-float').style.display = 'block';
   document.getElementById('user-badge').textContent = currentUser?.email || '';
   await loadData();
-  updateApiBanner();
   renderStats();
   renderJobs();
   renderNotes();
@@ -631,22 +627,8 @@ function renderStats() {
 }
 
 // ── AI ─────────────────────────────────────────────────────────────────────
-function updateApiBanner() {
-  const b = document.getElementById('api-banner');
-  if (apiKey) {
-    b.className = 'api-banner saved';
-    b.innerHTML = `<span>${lang==='zh'?'✓ API Key 已设置，AI 分析功能已启用':'✓ API Key saved — AI analysis enabled'}</span><button onclick="clearApiKey()" style="background:none;border:1px solid currentColor;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;color:inherit;">${lang==='zh'?'更换':'Change'}</button>`;
-  } else {
-    b.className = 'api-banner';
-    b.innerHTML = `<span>${lang==='zh'?'🔑 输入 Claude API Key 启用 AI 分析功能':'🔑 Enter Claude API Key to enable AI analysis'}</span><input type="password" id="api-key-input" placeholder="sk-ant-..." /><button onclick="saveApiKey()">${lang==='zh'?'保存':'Save'}</button>`;
-  }
-}
-
-function saveApiKey() { const v = document.getElementById('api-key-input')?.value?.trim(); if (!v) return; apiKey = v; localStorage.setItem('jda_api_key', apiKey); updateApiBanner(); }
-function clearApiKey() { apiKey = ''; localStorage.removeItem('jda_api_key'); updateApiBanner(); }
 
 async function runAI(jobId) {
-  if (!apiKey) { showToast(lang === 'zh' ? '请先输入 API Key' : 'Please enter your API Key'); return; }
   const job = jobs.find(j => j.id === jobId);
   if (!job) return;
   currentAIJobId = jobId; currentAIParsed = null;
@@ -654,20 +636,33 @@ async function runAI(jobId) {
   document.getElementById('ai-loading').style.display = 'flex';
   document.getElementById('ai-result').style.display = 'none';
   document.getElementById('modal-ai').classList.add('open');
-  const prompt = lang === 'zh'
-    ? `你是专业求职顾问，分析这个岗位的潜在风险。\n公司：${job.company}\n岗位：${job.position}\n地点：${job.location||'未知'}\n薪资：${job.salary||'未知'}\nJD：${job.jd||'未提供'}\n备注：${job.notes||'无'}\n\n只返回以下JSON：\n{"risks":[{"level":"red","title":"高风险雷区","text":"说明"},{"level":"amber","title":"需要关注","text":"说明"},{"level":"green","title":"积极信号","text":"说明"}],"verdict":"综合决策建议（2-3句）"}`
-    : `You are a career advisor. Analyze this job.\nCompany:${job.company}\nPosition:${job.position}\nLocation:${job.location||'Unknown'}\nSalary:${job.salary||'Unknown'}\nJD:${job.jd||'Not provided'}\nNotes:${job.notes||'None'}\n\nReturn ONLY JSON:\n{"risks":[{"level":"red","title":"High Risk","text":"..."},{"level":"amber","title":"Watch Out","text":"..."},{"level":"green","title":"Positive","text":"..."}],"verdict":"Recommendation (2-3 sentences)"}`;
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}, body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000, messages:[{role:'user',content:prompt}] }) });
-    const data = await res.json();
-    const raw = data.content.map(i => i.text||'').join('');
-    const parsed = JSON.parse(raw.replace(/```json|```/g,'').trim());
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch('https://iwmhtjnefdwdnpdkpylc.supabase.co/functions/v1/analyze-job', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+        'apikey': SUPABASE_KEY,
+      },
+      body: JSON.stringify({
+        company: job.company,
+        position: job.position,
+        location: job.location,
+        salary: job.salary,
+        jd: job.jd,
+        notes: job.notes,
+        lang
+      })
+    });
+    const parsed = await res.json();
+    if (parsed.error) throw new Error(parsed.error);
     currentAIParsed = parsed;
     document.getElementById('ai-result').innerHTML = `<div class="risk-grid">${parsed.risks.map(r=>`<div class="risk-item ${r.level}"><div class="risk-label">${r.title}</div><div class="risk-text">${r.text}</div></div>`).join('')}</div><div class="ai-verdict"><strong>${lang==='zh'?'综合建议：':'Verdict: '}</strong>${parsed.verdict}</div><div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;"><span style="font-size:12px;color:var(--text3);">${lang==='zh'?'保存后可在编辑岗位时查看':'Viewable in job edit after saving'}</span><button class="btn-primary" id="btn-save-ai" onclick="saveAIResult()" style="font-size:13px;padding:9px 18px;">${lang==='zh'?'💾 保存到岗位详情':'💾 Save to Job'}</button></div>`;
     document.getElementById('ai-loading').style.display = 'none';
     document.getElementById('ai-result').style.display = 'block';
   } catch(e) {
-    document.getElementById('ai-result').innerHTML = `<p style="color:var(--danger);font-size:14px;padding:16px 0;">${lang==='zh'?'分析失败，请检查 API Key':'Analysis failed. Check your API key.'}</p>`;
+    document.getElementById('ai-result').innerHTML = `<p style="color:var(--danger);font-size:14px;padding:16px 0;">${lang==='zh'?'分析失败，请稍后再试':'Analysis failed. Please try again.'}</p>`;
     document.getElementById('ai-loading').style.display = 'none';
     document.getElementById('ai-result').style.display = 'block';
   }
@@ -706,7 +701,7 @@ function setLang(l) {
   document.getElementById('main-title').textContent = l==='zh' ? '求职决策助手' : 'Job Decision Assistant';
   document.getElementById('btn-logout').textContent = l==='zh' ? '退出登录' : 'Sign Out';
   document.querySelectorAll('[data-zh]').forEach(el => { if(el.tagName==='INPUT') return; el.textContent = el.dataset[l]; });
-  updateApiBanner(); renderStats(); renderJobs(); renderNotes();
+  renderStats(); renderJobs(); renderNotes();
 }
 
 // ── FEEDBACK ──────────────────────────────────────────────────────────────
