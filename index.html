@@ -400,8 +400,10 @@ async function init() {
 
 // ── AUTH ───────────────────────────────────────────────────────────────────
 function showAuth() {
+  document.getElementById('loading-overlay').classList.add('hidden');
   document.getElementById('auth-screen').style.display = 'flex';
   document.getElementById('app-shell').classList.remove('visible');
+  document.getElementById('feedback-float').style.display = 'none';
 }
 
 async function showApp() {
