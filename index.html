@@ -353,6 +353,7 @@ let editingNoteId = null;
 let currentAIJobId = null;
 let currentAIParsed = null;
 let authMode = 'login';
+let isPasswordRecovery = false;
 
 // ── TRANSLATIONS ───────────────────────────────────────────────────────────
 const T = {
@@ -362,6 +363,31 @@ const T = {
 
 // ── INIT ───────────────────────────────────────────────────────────────────
 async function init() {
+  // Listen for auth events FIRST before anything else
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'PASSWORD_RECOVERY') {
+      // User clicked reset link in email - show reset password form
+      isPasswordRecovery = true;
+      document.getElementById('loading-overlay').classList.add('hidden');
+      document.getElementById('auth-screen').style.display = 'flex';
+      document.getElementById('app-shell').classList.remove('visible');
+      document.getElementById('auth-form-main').style.display = 'none';
+      document.getElementById('auth-form-forgot').style.display = 'none';
+      document.getElementById('auth-form-reset').style.display = 'flex';
+      document.getElementById('auth-tabs').style.display = 'none';
+    } else if (event === 'SIGNED_IN' && session) {
+      // Only go to app if this is NOT a password recovery flow
+      if (!isPasswordRecovery) {
+        currentUser = session.user;
+        await showApp();
+      }
+    } else if (event === 'SIGNED_OUT') {
+      isPasswordRecovery = false;
+      currentUser = null;
+      showAuth();
+    }
+  });
+
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
     currentUser = session.user;
@@ -370,23 +396,6 @@ async function init() {
     showAuth();
   }
   document.getElementById('loading-overlay').classList.add('hidden');
-
-  sb.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'PASSWORD_RECOVERY') {
-      document.getElementById('loading-overlay').classList.add('hidden');
-      document.getElementById('auth-screen').style.display = 'flex';
-      document.getElementById('auth-form-main').style.display = 'none';
-      document.getElementById('auth-form-forgot').style.display = 'none';
-      document.getElementById('auth-form-reset').style.display = 'flex';
-      document.getElementById('auth-tabs').style.display = 'none';
-    } else if (event === 'SIGNED_IN' && session) {
-      currentUser = session.user;
-      await showApp();
-    } else if (event === 'SIGNED_OUT') {
-      currentUser = null;
-      showAuth();
-    }
-  });
 }
 
 // ── AUTH ───────────────────────────────────────────────────────────────────
@@ -493,15 +502,17 @@ function showForgotMsg(text, type) {
 async function handleResetPassword() {
   const password = document.getElementById('reset-password').value;
   const confirm = document.getElementById('reset-password-confirm').value;
-  const msg = document.getElementById('reset-msg');
   if (!password || password.length < 6) { showResetMsg('Password must be at least 6 characters.', 'error'); return; }
   if (password !== confirm) { showResetMsg('Passwords do not match.', 'error'); return; }
   const { error } = await sb.auth.updateUser({ password });
   if (error) {
     showResetMsg(error.message, 'error');
   } else {
-    showResetMsg('Password updated! Signing you in...', 'success');
-    setTimeout(() => showApp(), 1500);
+    showResetMsg('Password updated! Taking you to the app...', 'success');
+    isPasswordRecovery = false;
+    const { data: { session } } = await sb.auth.getSession();
+    currentUser = session.user;
+    setTimeout(() => showApp(), 1200);
   }
 }
 
