@@ -352,8 +352,12 @@ let editingNoteId = null;
 
 let currentAIJobId = null;
 let currentAIParsed = null;
-let authMode = 'login';
-let isPasswordRecovery = false;
+
+// ── AUTH STATE MACHINE ────────────────────────────────────────────────────
+// Single source of truth for which auth view to show.
+// Possible values: 'login' | 'signup' | 'forgot' | 'reset' | 'app'
+let authState = 'login';
+let authMode = 'login';  // sub-state for login/signup tab
 
 // ── TRANSLATIONS ───────────────────────────────────────────────────────────
 const T = {
@@ -363,63 +367,96 @@ const T = {
 
 // ── INIT ───────────────────────────────────────────────────────────────────
 async function init() {
-  // Check for password recovery token in URL first
+  // Step 1: Check URL for password recovery token (highest priority)
   const hashParams = new URLSearchParams(window.location.hash.replace('#', '?'));
-  const type = hashParams.get('type');
-
-  if (type === 'recovery') {
-    // User came from reset password email link
-    isPasswordRecovery = true;
-    showAuth();
-    document.getElementById('auth-form-main').style.display = 'none';
-    document.getElementById('auth-form-forgot').style.display = 'none';
-    document.getElementById('auth-form-reset').style.display = 'flex';
-    document.getElementById('auth-tabs').style.display = 'none';
-    document.getElementById('loading-overlay').classList.add('hidden');
+  if (hashParams.get('type') === 'recovery') {
+    renderAuthState('reset');
     return;
   }
 
-  // Normal flow - check existing session
+  // Step 2: Check existing session
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
     currentUser = session.user;
-    await showApp();
+    await renderAuthState('app');
   } else {
-    showAuth();
+    renderAuthState('login');
   }
-  document.getElementById('loading-overlay').classList.add('hidden');
 
-  // Listen for future auth changes
+  // Step 3: Listen for auth changes (but only when not in reset flow)
   sb.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_IN' && session && !isPasswordRecovery) {
+    // Ignore SIGNED_IN events while in reset flow - the recovery hash already
+    // triggers a SIGNED_IN under the hood, but we want to stay on reset screen.
+    if (authState === 'reset') return;
+
+    if (event === 'SIGNED_IN' && session) {
       currentUser = session.user;
-      await showApp();
+      await renderAuthState('app');
     } else if (event === 'SIGNED_OUT') {
-      isPasswordRecovery = false;
       currentUser = null;
-      showAuth();
+      renderAuthState('login');
     }
   });
 }
 
-// ── AUTH ───────────────────────────────────────────────────────────────────
-function showAuth() {
+// ── UI RENDERER ───────────────────────────────────────────────────────────
+// One function controls all auth-related UI changes. Called from a single
+// place (state transitions). No scattered display:none/display:flex calls.
+async function renderAuthState(newState) {
+  authState = newState;
   document.getElementById('loading-overlay').classList.add('hidden');
-  document.getElementById('auth-screen').style.display = 'flex';
-  document.getElementById('app-shell').classList.remove('visible');
-  document.getElementById('feedback-float').style.display = 'none';
+
+  // Reset all auth forms to hidden, then show only the one we want
+  const screens = {
+    main: document.getElementById('auth-form-main'),
+    forgot: document.getElementById('auth-form-forgot'),
+    reset: document.getElementById('auth-form-reset'),
+    tabs: document.getElementById('auth-tabs'),
+  };
+  Object.values(screens).forEach(el => el && (el.style.display = 'none'));
+
+  const authScreen = document.getElementById('auth-screen');
+  const appShell = document.getElementById('app-shell');
+  const feedback = document.getElementById('feedback-float');
+
+  if (newState === 'app') {
+    authScreen.style.display = 'none';
+    appShell.classList.add('visible');
+    feedback.style.display = 'block';
+    document.getElementById('user-badge').textContent = currentUser?.email || '';
+    await loadData();
+    renderStats();
+    renderJobs();
+    renderNotes();
+    return;
+  }
+
+  // All auth states share these
+  authScreen.style.display = 'flex';
+  appShell.classList.remove('visible');
+  feedback.style.display = 'none';
+  clearAuthMessages();
+
+  if (newState === 'login' || newState === 'signup') {
+    screens.main.style.display = 'flex';
+    screens.tabs.style.display = 'flex';
+  } else if (newState === 'forgot') {
+    screens.forgot.style.display = 'flex';
+  } else if (newState === 'reset') {
+    screens.reset.style.display = 'flex';
+  }
 }
 
-async function showApp() {
-  document.getElementById('auth-screen').style.display = 'none';
-  document.getElementById('app-shell').classList.add('visible');
-  document.getElementById('feedback-float').style.display = 'block';
-  document.getElementById('user-badge').textContent = currentUser?.email || '';
-  await loadData();
-  renderStats();
-  renderJobs();
-  renderNotes();
+function clearAuthMessages() {
+  ['auth-msg', 'forgot-msg', 'reset-msg'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
 }
+
+// ── AUTH ───────────────────────────────────────────────────────────────────
+// Note: most UI changes go through renderAuthState() above.
+// These are kept as named aliases for readability where used.
 
 function switchAuthTab(mode) {
   authMode = mode;
@@ -433,28 +470,35 @@ async function handleAuth() {
   const email = document.getElementById('auth-email').value.trim();
   const password = document.getElementById('auth-password').value;
   const btn = document.getElementById('auth-submit-btn');
-  const msg = document.getElementById('auth-msg');
 
   if (!email || !password) { showAuthMsg('Please enter email and password.', 'error'); return; }
-  btn.disabled = true;
-  btn.textContent = authMode === 'login' ? 'Signing in...' : 'Creating account...';
+  setButtonLoading(btn, authMode === 'login' ? 'Signing in...' : 'Creating account...');
 
-  let result;
-  if (authMode === 'login') {
-    result = await sb.auth.signInWithPassword({ email, password });
-  } else {
-    result = await sb.auth.signUp({ email, password });
-  }
+  const result = authMode === 'login'
+    ? await sb.auth.signInWithPassword({ email, password })
+    : await sb.auth.signUp({ email, password });
+
+  resetButton(btn, authMode === 'login' ? 'Sign In' : 'Create Account');
 
   if (result.error) {
     showAuthMsg(result.error.message, 'error');
-    btn.disabled = false;
-    btn.textContent = authMode === 'login' ? 'Sign In' : 'Create Account';
-  } else if (authMode === 'signup' && !result.data.session) {
+  } else if (result.data.session) {
+    // onAuthStateChange will handle navigation to app
+    currentUser = result.data.session.user;
+    await renderAuthState('app');
+  } else if (authMode === 'signup') {
     showAuthMsg('Account created! Please check your email to confirm.', 'success');
-    btn.disabled = false;
-    btn.textContent = 'Create Account';
   }
+}
+
+// Helper: show loading state on a button
+function setButtonLoading(btn, text) {
+  btn.disabled = true;
+  btn.textContent = text;
+}
+function resetButton(btn, text) {
+  btn.disabled = false;
+  btn.textContent = text;
 }
 
 function showAuthMsg(text, type) {
@@ -465,25 +509,16 @@ function showAuthMsg(text, type) {
 }
 
 async function handleLogout() {
-  const { error } = await sb.auth.signOut();
-  jobs = []; notes = [];
-  document.getElementById('feedback-float').style.display = 'none';
-  document.getElementById('app-shell').classList.remove('visible');
-  document.getElementById('auth-screen').style.display = 'flex';
+  await sb.auth.signOut();
+  // Clear in-memory data so it doesn't leak to next user on same browser
+  jobs = [];
+  notes = [];
+  currentUser = null;
+  // onAuthStateChange handles the UI transition to login
 }
 
-function showForgotPassword() {
-  document.getElementById('auth-form-main').style.display = 'none';
-  document.getElementById('auth-form-forgot').style.display = 'flex';
-  document.getElementById('auth-tabs').style.display = 'none';
-}
-
-function showMainAuth() {
-  document.getElementById('auth-form-main').style.display = 'flex';
-  document.getElementById('auth-form-forgot').style.display = 'none';
-  document.getElementById('auth-form-reset').style.display = 'none';
-  document.getElementById('auth-tabs').style.display = 'flex';
-}
+function showForgotPassword() { renderAuthState('forgot'); }
+function showMainAuth() { renderAuthState('login'); }
 
 async function handleForgotPassword() {
   const email = document.getElementById('forgot-email').value.trim();
@@ -507,23 +542,35 @@ function showForgotMsg(text, type) {
 
 async function handleResetPassword() {
   const password = document.getElementById('reset-password').value;
-  const confirm = document.getElementById('reset-password-confirm').value;
-  if (!password || password.length < 6) { showResetMsg('Password must be at least 6 characters.', 'error'); return; }
-  if (password !== confirm) { showResetMsg('Passwords do not match.', 'error'); return; }
+  const confirmPass = document.getElementById('reset-password-confirm').value;
+
+  // Validation
+  if (!password || password.length < 6) {
+    showResetMsg('Password must be at least 6 characters.', 'error');
+    return;
+  }
+  if (password !== confirmPass) {
+    showResetMsg('Passwords do not match.', 'error');
+    return;
+  }
+
   const { error } = await sb.auth.updateUser({ password });
   if (error) {
     showResetMsg(error.message, 'error');
-  } else {
-    showResetMsg('Password updated successfully!', 'success');
-    isPasswordRecovery = false;
-    await sb.auth.signOut();
-    setTimeout(() => {
-      showMainAuth();
-      document.getElementById('auth-screen').style.display = 'flex';
-      document.getElementById('app-shell').classList.remove('visible');
-      document.getElementById('feedback-float').style.display = 'none';
-    }, 1500);
+    return;
   }
+
+  showResetMsg('Password updated! Please sign in with your new password.', 'success');
+
+  // Clean up: clear URL hash, then sign out, then transition to login.
+  // Waiting for signOut() prevents the race condition where login is
+  // attempted before the old session is fully cleared.
+  window.history.replaceState(null, '', window.location.pathname);
+  await sb.auth.signOut();
+
+  // Give user a moment to read the success message
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  renderAuthState('login');
 }
 
 function showResetMsg(text, type) {
