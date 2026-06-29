@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Job Decision Assistant</title>
+<title>EarlyWise</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -176,8 +176,8 @@
 <!-- ── AUTH SCREEN ── -->
 <div class="auth-screen" id="auth-screen" style="display:none;">
   <div class="auth-card">
-    <div class="auth-logo">Job Decision Assistant</div>
-    <div class="auth-tagline">Track applications · Record interviews · AI risk analysis</div>
+    <div class="auth-logo">EarlyWise</div>
+    <div class="auth-tagline">Be wise early — from the very first screening</div>
     <div class="auth-tabs">
       <button class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Sign In</button>
       <button class="auth-tab" id="tab-signup" onclick="switchAuthTab('signup')">Sign Up</button>
@@ -218,7 +218,7 @@
 <div class="app-shell" id="app-shell">
   <div class="header">
     <div class="header-left">
-      <div class="header-title" id="main-title">Job Decision Assistant</div>
+      <div class="header-title" id="main-title">EarlyWise</div>
     </div>
     <div class="header-right">
       <span class="user-badge" id="user-badge"></span>
@@ -927,7 +927,7 @@ function showToast(msg) {
 function setLang(l) {
   lang = l;
   document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', (l==='zh'&&b.textContent==='中文')||(l==='en'&&b.textContent==='EN')));
-  document.getElementById('main-title').textContent = l==='zh' ? '求职决策助手' : 'Job Decision Assistant';
+  document.getElementById('main-title').textContent = l==='zh' ? 'EarlyWise' : 'EarlyWise';
   document.getElementById('btn-logout').textContent = l==='zh' ? '退出登录' : 'Sign Out';
   document.querySelectorAll('[data-zh]').forEach(el => { if(el.tagName==='INPUT') return; el.textContent = el.dataset[l]; });
   renderStats(); renderJobs(); renderNotes();
