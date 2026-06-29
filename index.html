@@ -831,7 +831,10 @@ async function runAI(jobId) {
     const parsed = await res.json();
     if (parsed.error) throw new Error(parsed.error);
     currentAIParsed = parsed;
-    document.getElementById('ai-result').innerHTML = `<div class="risk-grid">${parsed.risks.map(r=>`<div class="risk-item ${r.level}"><div class="risk-label">${r.title}</div><div class="risk-text">${r.text}</div></div>`).join('')}</div><div class="ai-verdict"><strong>${lang==='zh'?'综合建议：':'Verdict: '}</strong>${parsed.verdict}</div><div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;"><span style="font-size:12px;color:var(--text3);">${lang==='zh'?'保存后可在编辑岗位时查看':'Viewable in job edit after saving'}</span><button class="btn-primary" id="btn-save-ai" onclick="saveAIResult()" style="font-size:13px;padding:9px 18px;">${lang==='zh'?'💾 保存到岗位详情':'💾 Save to Job'}</button></div>`;
+    const disclaimer = lang === 'zh'
+      ? '分析基于公开信息和员工评价，个人体验可能有所不同。'
+      : 'Analysis is based on publicly available information and employee reviews. Individual experiences may vary.';
+    document.getElementById('ai-result').innerHTML = `<div class="risk-grid">${parsed.risks.map(r=>`<div class="risk-item ${r.level}"><div class="risk-label">${r.title}</div><div class="risk-text">${r.text}</div></div>`).join('')}</div><div class="ai-verdict"><strong>${lang==='zh'?'综合建议：':'Verdict: '}</strong>${parsed.verdict}</div><p style="font-size:11px;color:var(--text3);font-style:italic;margin-top:14px;padding:10px 12px;background:var(--surface2);border-radius:8px;line-height:1.5;">⚠️ ${disclaimer}</p><div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;"><span style="font-size:12px;color:var(--text3);">${lang==='zh'?'保存后可在编辑岗位时查看':'Viewable in job edit after saving'}</span><button class="btn-primary" id="btn-save-ai" onclick="saveAIResult()" style="font-size:13px;padding:9px 18px;">${lang==='zh'?'💾 保存到岗位详情':'💾 Save to Job'}</button></div>`;
     document.getElementById('ai-loading').style.display = 'none';
     document.getElementById('ai-result').style.display = 'block';
   } catch(e) {
@@ -879,8 +882,12 @@ async function runPrepQuestions(jobId) {
         </ul>
       </div>
     `).join('');
+    const prepDisclaimer = lang === 'zh'
+      ? '问题由 AI 基于公开信息生成，建议结合实际情况调整。'
+      : 'Questions are AI-generated based on public info. Adapt them to fit your context.';
+    const disclaimerHtml = `<p style="font-size:11px;color:var(--text3);font-style:italic;margin-top:8px;padding:10px 12px;background:var(--surface2);border-radius:8px;line-height:1.5;">⚠️ ${prepDisclaimer}</p>`;
 
-    document.getElementById('prep-result').innerHTML = html;
+    document.getElementById('prep-result').innerHTML = html + disclaimerHtml;
     document.getElementById('prep-loading').style.display = 'none';
     document.getElementById('prep-result').style.display = 'block';
   } catch(e) {
