@@ -322,6 +322,25 @@
   <button class="feedback-btn" onclick="toggleFeedback()" id="feedback-toggle-btn">💬 Feedback</button>
 </div>
 
+<!-- Prep Questions Modal -->
+<div class="modal-overlay" id="modal-prep">
+  <div class="modal" style="max-width:640px;">
+    <button class="modal-close" onclick="closeModal('modal-prep')">✕</button>
+    <div class="ai-panel-header">
+      <div class="ai-icon">?</div>
+      <div>
+        <div class="ai-panel-title" id="prep-panel-job-name"></div>
+        <div class="ai-subtitle" id="prep-subtitle">Questions to ask your interviewer</div>
+      </div>
+    </div>
+    <div id="prep-loading" class="ai-loading" style="display:none;">
+      <div class="dots"><span></span><span></span><span></span></div>
+      <span id="prep-loading-text">Generating questions...</span>
+    </div>
+    <div id="prep-result" style="display:none;"></div>
+  </div>
+</div>
+
 <!-- AI Modal -->
 <div class="modal-overlay" id="modal-ai">
   <div class="modal" style="max-width:620px;">
@@ -361,8 +380,8 @@ let authMode = 'login';  // sub-state for login/signup tab
 
 // ── TRANSLATIONS ───────────────────────────────────────────────────────────
 const T = {
-  zh: { total:'全部申请', interviews:'面试中', offers:'已拿Offer', notesCount:'面试笔记', noJobs:'还没有添加岗位', noJobsSub:'点击右上角开始记录你的第一个申请', noNotes:'还没有面试笔记', noNotesSub:'完成面试后在这里记录', addFirst:'+ 添加第一个岗位', stages:{screening:'初步筛选',interview:'面试中',offer:'Offer',rejected:'未通过'}, edit:'编辑', analyze:'AI分析', del:'删除', editNote:'编辑', delNote:'删除' },
-  en: { total:'Total', interviews:'Interviews', offers:'Offers', notesCount:'Notes', noJobs:'No jobs added yet', noJobsSub:'Click the button to add your first application', noNotes:'No interview notes yet', noNotesSub:'Record notes after each interview', addFirst:'+ Add First Job', stages:{screening:'Screening',interview:'Interview',offer:'Offer',rejected:'Rejected'}, edit:'Edit', analyze:'AI Analyze', del:'Delete', editNote:'Edit', delNote:'Delete' }
+  zh: { total:'全部申请', interviews:'面试中', offers:'已拿Offer', notesCount:'面试笔记', noJobs:'还没有添加岗位', noJobsSub:'点击右上角开始记录你的第一个申请', noNotes:'还没有面试笔记', noNotesSub:'完成面试后在这里记录', addFirst:'+ 添加第一个岗位', stages:{screening:'初步筛选',interview:'面试中',offer:'Offer',rejected:'未通过'}, edit:'编辑', analyze:'AI分析', prep:'面试准备', del:'删除', editNote:'编辑', delNote:'删除' },
+  en: { total:'Total', interviews:'Interviews', offers:'Offers', notesCount:'Notes', noJobs:'No jobs added yet', noJobsSub:'Click the button to add your first application', noNotes:'No interview notes yet', noNotesSub:'Record notes after each interview', addFirst:'+ Add First Job', stages:{screening:'Screening',interview:'Interview',offer:'Offer',rejected:'Rejected'}, edit:'Edit', analyze:'AI Analyze', prep:'Prep Questions', del:'Delete', editNote:'Edit', delNote:'Delete' }
 };
 
 // ── INIT ───────────────────────────────────────────────────────────────────
@@ -684,6 +703,7 @@ function renderJobs() {
     <div class="job-card-actions">
       <button class="btn-sm" onclick="openJobModal('${j.id}')">${t.edit}</button>
       <button class="btn-sm ai" onclick="runAI('${j.id}')">${t.analyze}</button>
+      <button class="btn-sm ai" onclick="runPrepQuestions('${j.id}')">${t.prep}</button>
       <button class="btn-sm danger" onclick="deleteJob('${j.id}')">${t.del}</button>
     </div>
   </div>`).join('');
@@ -818,6 +838,55 @@ async function runAI(jobId) {
     document.getElementById('ai-result').innerHTML = `<p style="color:var(--danger);font-size:14px;padding:16px 0;">${lang==='zh'?'分析失败，请稍后再试':'Analysis failed. Please try again.'}</p>`;
     document.getElementById('ai-loading').style.display = 'none';
     document.getElementById('ai-result').style.display = 'block';
+  }
+}
+
+async function runPrepQuestions(jobId) {
+  const job = jobs.find(j => j.id === jobId);
+  if (!job) return;
+  document.getElementById('prep-panel-job-name').textContent = `${job.company} · ${job.position}`;
+  document.getElementById('prep-subtitle').textContent = lang === 'zh' ? '可以问面试官的问题' : 'Questions to ask your interviewer';
+  document.getElementById('prep-loading-text').textContent = lang === 'zh' ? '正在生成问题...' : 'Generating questions...';
+  document.getElementById('prep-loading').style.display = 'flex';
+  document.getElementById('prep-result').style.display = 'none';
+  document.getElementById('prep-result').innerHTML = '';
+  document.getElementById('modal-prep').classList.add('open');
+
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch('https://iwmhtjnefdwdnpdkpylc.supabase.co/functions/v1/interview-questions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+        'apikey': SUPABASE_KEY,
+      },
+      body: JSON.stringify({
+        company: job.company,
+        position: job.position,
+        jd: job.jd,
+        lang
+      })
+    });
+    const parsed = await res.json();
+    if (parsed.error) throw new Error(parsed.error);
+
+    const html = parsed.categories.map(cat => `
+      <div style="margin-bottom:20px;">
+        <div style="font-family:var(--font-display);font-size:16px;color:var(--accent);margin-bottom:10px;">${cat.title}</div>
+        <ul style="list-style:none;padding:0;">
+          ${cat.questions.map(q => `<li style="background:var(--surface2);border-left:3px solid var(--accent);padding:10px 14px;border-radius:6px;margin-bottom:8px;font-size:14px;line-height:1.55;">${q}</li>`).join('')}
+        </ul>
+      </div>
+    `).join('');
+
+    document.getElementById('prep-result').innerHTML = html;
+    document.getElementById('prep-loading').style.display = 'none';
+    document.getElementById('prep-result').style.display = 'block';
+  } catch(e) {
+    document.getElementById('prep-result').innerHTML = `<p style="color:var(--danger);font-size:14px;padding:16px 0;">${lang==='zh'?'生成失败，请稍后再试':'Failed to generate. Please try again.'}</p>`;
+    document.getElementById('prep-loading').style.display = 'none';
+    document.getElementById('prep-result').style.display = 'block';
   }
 }
 
